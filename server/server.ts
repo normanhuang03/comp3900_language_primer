@@ -20,11 +20,80 @@ interface Group {
   members: Student[];
 }
 
+class Groups {
+  // Local storage
+  groups: Group[];
+  // Used to generate IDs
+  groupIdTracker: number;
+  studentIdTracker: number;
+
+  constructor() {
+    this.groups = [];
+    this.groupIdTracker = 0;
+    this.studentIdTracker = 0;
+  }
+
+  // Find a group by ID
+  getGroup(id: number): Group | undefined {
+    return this.groups.find(group => group.id == id);
+  }
+
+  // Collate all group summaries
+  getAllGroupSummaries(): GroupSummary[] {
+    return this.groups.map(this.createGroupSummary);
+  }
+
+  // Create a group summary based on ID
+  createGroupSummary(group: Group): GroupSummary {
+    return {
+      id: group.id,
+      groupName: group.groupName,
+      members: group.members.map(student => student.id)
+    };
+  }
+
+  // Create a new group
+  createGroup(groupName: string, members: string[]): GroupSummary {
+    const newGroup: Group = {
+      id: this.groupIdTracker++,
+      groupName: groupName,
+      members: members.map(this.createStudent, this)
+    };
+    this.groups.push(newGroup);
+
+    return this.createGroupSummary(newGroup);
+  }
+
+  // Create a new student
+  createStudent(name: string): Student {
+    return {
+      id: this.studentIdTracker++,
+      name: name
+    };
+  }
+
+  // Get all students
+  getAllStudents(): Student[] {
+    return this.groups.flatMap(group => group.members);
+  }
+
+  deleteGroup(id: number): boolean {
+    const index = this.groups.findIndex(group => group.id == id);
+    if (index >= 0) {
+      this.groups.splice(index, 1);
+      return true;
+    }
+    return false;
+  }
+}
+
 const app = express();
 const port = 3902;
 
 app.use(cors());
 app.use(express.json());
+
+const groups = new Groups();
 
 /**
  * Route to get all groups
@@ -33,18 +102,7 @@ app.use(express.json());
  */
 app.get('/api/groups', (req: Request, res: Response) => {
   // TODO: (sample response below)
-  res.json([
-    {
-      id: 1,
-      groupName: 'Group 1',
-      members: [1, 2, 4],
-    },
-    {
-      id: 2,
-      groupName: 'Group 2',
-      members: [3, 5],
-    },
-  ]);
+  res.json(groups.getAllGroupSummaries());
 });
 
 /**
@@ -54,13 +112,7 @@ app.get('/api/groups', (req: Request, res: Response) => {
  */
 app.get('/api/students', (req: Request, res: Response) => {
   // TODO: (sample response below)
-  res.json([
-    { id: 1, name: 'Alice' },
-    { id: 2, name: 'Bob' },
-    { id: 3, name: 'Charlie' },
-    { id: 4, name: 'David' },
-    { id: 5, name: 'Eve' },
-  ]);
+  res.json(groups.getAllStudents());
 });
 
 /**
@@ -72,11 +124,15 @@ app.get('/api/students', (req: Request, res: Response) => {
  */
 app.post('/api/groups', (req: Request, res: Response) => {
   // TODO: implement storage of a new group and return their info (sample response below)
-  res.json({
-    id: 3,
-    groupName: 'New Group',
-    members: [1, 2],
-  });
+  const { groupName, members } = req.body;
+
+  // Edge case: groups must contain at least one member
+  if (members[0] == '') {
+    res.status(400).send("Groups must contain members");
+    return;
+  }
+
+  res.json(groups.createGroup(groupName, members));
 });
 
 /**
@@ -87,6 +143,16 @@ app.post('/api/groups', (req: Request, res: Response) => {
  */
 app.delete('/api/groups/:id', (req: Request, res: Response) => {
   // TODO: (delete the group with the specified id)
+  const id = parseInt(req.params.id);
+
+  const group = groups.getGroup(id)
+
+  if (!group) {
+    res.status(404).send(`Group not found with ID: ${id}`);
+    return;
+  }
+
+  groups.deleteGroup(id);
 
   res.sendStatus(204); // send back a 204 (do not modify this line)
 });
@@ -99,15 +165,17 @@ app.delete('/api/groups/:id', (req: Request, res: Response) => {
  */
 app.get('/api/groups/:id', (req: Request, res: Response) => {
   // TODO: (sample response below)
-  res.json({
-    id: 1,
-    groupName: 'Group 1',
-    members: [
-      { id: 1, name: 'Alice' },
-      { id: 2, name: 'Bob' },
-      { id: 3, name: 'Charlie' },
-    ],
-  });
+  const id = parseInt(req.params.id);
+
+  const group = groups.getGroup(id)
+
+  // Edge case: cannot delete an invalid ID
+  if (!group) {
+    res.status(404).send(`Group not found with ID: ${id}`);
+    return;
+  }
+
+  res.json(group);
 
   /* TODO:
    * if (group id isn't valid) {
